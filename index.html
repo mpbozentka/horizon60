@@ -158,86 +158,47 @@
       <!-- Tab: Forecast (Freedom Engine, projection, sidebar) -->
       <div id="panel-forecast" class="tab-panel hidden grid grid-cols-12 gap-6">
       <div class="col-span-12 lg:col-span-9 space-y-8">
-        <!-- Freedom Slider Workspace -->
+        <!-- Per-account contribution & return settings -->
         <section class="glass-panel rounded-2xl p-6 lg:p-8">
-          <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-            <div>
-              <h2 class="text-xl font-bold text-white">Freedom Engine Workspace</h2>
-              <p class="text-white/50 text-sm">Adjust parameters to simulate your exit timeline.</p>
-            </div>
-            <div class="flex bg-white/5 p-1 rounded-xl border border-white/10 self-end md:self-auto">
-              <button class="px-4 py-1.5 rounded-lg text-xs font-bold bg-white/10 text-white">LEAN FIRE</button>
-              <button class="px-4 py-1.5 rounded-lg text-xs font-bold text-white/40 hover:text-white transition-colors">FAT FIRE</button>
-            </div>
+          <div class="mb-6">
+            <h2 class="text-xl font-bold text-white">Contribution & return by account</h2>
+            <p class="text-white/50 text-sm mt-1">Set monthly contribution, predicted annual return, and an optional stop date for each account. No stop date means contributions continue through the forecast horizon.</p>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div class="space-y-6">
-              <div class="space-y-3">
-                <div class="flex justify-between">
-                  <label class="text-sm font-semibold text-white/80">Monthly Injection</label>
-                  <span class="text-primary font-bold">$5,500</span>
-                </div>
-                <input class="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" type="range" min="500" max="20000" step="100"/>
-                <p class="text-[10px] text-white/30 uppercase tracking-widest font-bold">Contribution Amount</p>
-              </div>
-              <div class="space-y-3">
-                <div class="flex justify-between">
-                  <label class="text-sm font-semibold text-white/80">Expected Yield</label>
-                  <span class="text-primary font-bold">8.4%</span>
-                </div>
-                <input class="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" type="range" min="1" max="15" step="0.1"/>
-                <p class="text-[10px] text-white/30 uppercase tracking-widest font-bold">Annual ROI Projection</p>
-              </div>
-            </div>
-            <div class="space-y-6 border-l border-white/10 pl-0 md:pl-8">
-              <div class="space-y-3">
-                <div class="flex justify-between">
-                  <label class="text-sm font-semibold text-accent-blue/80">BTC Multiplier</label>
-                  <span class="text-accent-blue font-bold">2.5x</span>
-                </div>
-                <input class="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent-blue" type="range" min="1" max="10" step="0.5"/>
-                <p class="text-[10px] text-white/30 uppercase tracking-widest font-bold">Crypto Allocation Weight</p>
-              </div>
-              <div class="space-y-3">
-                <div class="flex justify-between">
-                  <label class="text-sm font-semibold text-white/80">Withdrawal Rate</label>
-                  <span class="text-primary font-bold">3.5%</span>
-                </div>
-                <input class="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" type="range" min="1" max="7" step="0.1"/>
-                <p class="text-[10px] text-white/30 uppercase tracking-widest font-bold">Safe SWR percentage</p>
-              </div>
-            </div>
-            <div class="bg-primary/5 rounded-xl border border-primary/20 p-5 flex flex-col justify-center text-center">
-              <p class="text-primary/60 text-[10px] font-bold uppercase tracking-widest mb-1">Time to Freedom</p>
-              <h4 class="text-4xl font-extrabold text-primary">12.4 YRS</h4>
-              <p class="text-white/40 text-xs mt-2 italic">Age 42.4 — Freedom Date: Sept 2036</p>
-              <div class="mt-4 pt-4 border-t border-primary/10">
-                <button class="w-full bg-primary/20 hover:bg-primary/30 text-primary py-2 rounded-lg text-xs font-extrabold uppercase transition-all">Lock Scenario</button>
-              </div>
-            </div>
+          <div class="mb-6 flex flex-wrap items-center gap-6">
+            <label class="flex items-center gap-2">
+              <span class="text-sm font-semibold text-white/80">Forecast horizon (years)</span>
+              <input id="forecast-horizon-years" type="number" min="1" max="60" value="30" class="w-20 rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary"/>
+            </label>
+            <label class="flex items-center gap-2">
+              <span class="text-sm font-semibold text-white/80">Annual expenses ($)</span>
+              <input id="forecast-annual-expenses" type="number" min="0" step="1000" placeholder="e.g. 50000" class="w-28 rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary"/>
+            </label>
+            <label class="flex items-center gap-2">
+              <span class="text-sm font-semibold text-white/80">Expense growth (%/yr)</span>
+              <input id="forecast-expense-growth" type="number" min="-10" step="0.5" max="20" placeholder="3" class="w-20 rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary"/>
+            </label>
+          </div>
+          <div id="forecast-account-settings" class="space-y-4">
+            <!-- Filled by JS: one card per account -->
           </div>
         </section>
 
         <!-- Future Horizon Projection -->
         <section class="glass-panel rounded-2xl p-6 lg:p-8 relative overflow-hidden">
-          <div class="flex items-center justify-between mb-8">
+          <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
             <div>
               <h2 class="text-xl font-bold text-white">Future Horizon Projection</h2>
-              <p class="text-white/50 text-sm">Wealth trajectory vs. Passive Expense floor.</p>
+              <p class="text-white/50 text-sm">Net worth and each account over time. Set contributions and returns above; add annual expenses to show the expense line.</p>
             </div>
-            <div class="flex items-center gap-4 text-xs font-bold">
-              <div class="flex items-center gap-2">
-                <div class="size-3 rounded-full bg-primary"></div>
-                <span class="text-white/60">Portfolio</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <div class="size-3 rounded-full bg-white/20"></div>
-                <span class="text-white/60">Expenses</span>
-              </div>
+            <div class="flex rounded-xl bg-white/5 p-1 border border-white/10" id="forecast-chart-mode-wrap">
+              <button type="button" class="forecast-chart-mode px-4 py-2 rounded-lg text-sm font-semibold transition-colors bg-primary text-background-dark" data-mode="balances">Balances</button>
+              <button type="button" class="forecast-chart-mode px-4 py-2 rounded-lg text-sm font-semibold text-white/60 hover:text-white transition-colors" data-mode="interest">Interest earned</button>
             </div>
           </div>
-          <!-- Area Chart Visual -->
-          <div class="relative h-[300px] w-full">
+          <div class="relative h-[360px] w-full">
+            <canvas id="forecast-chart" aria-label="Projected net worth and account balances over time"></canvas>
+          </div>
+          <div class="hidden">
             <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 1200 300">
               <defs>
                 <linearGradient id="areaGradient" x1="0" x2="0" y1="0" y2="1">
@@ -289,33 +250,12 @@
           </div>
         </div>
 
-        <!-- Snapshot Stats -->
-        <div class="glass-panel p-6 rounded-2xl">
+        <!-- Horizon Milestones (filled by JS with projections + FIRE definitions) -->
+        <div id="horizon-milestones-card" class="glass-panel p-6 rounded-2xl">
           <h3 class="text-sm font-bold text-white mb-4">Horizon Milestones</h3>
-          <div class="space-y-4">
-            <div class="flex items-center justify-between">
-              <span class="text-xs text-white/40">Coast FIRE</span>
-              <span class="text-xs font-bold text-white/50">—</span>
-            </div>
-            <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-              <div class="h-full bg-primary w-0"></div>
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-xs text-white/40">Lean FIRE</span>
-              <span class="text-xs font-bold text-white/50">—</span>
-            </div>
-            <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-              <div class="h-full bg-primary w-0"></div>
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-xs text-white/40">Fat FIRE</span>
-              <span class="text-xs font-bold text-white/50">—</span>
-            </div>
-            <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-              <div class="h-full bg-primary w-0"></div>
-            </div>
+          <div id="horizon-milestones-list" class="space-y-4">
+            <!-- Filled by JS -->
           </div>
-          <p class="text-[10px] text-white/40 mt-4">Add accounts to track progress toward your goals.</p>
         </div>
 
         <!-- Recent Events -->
@@ -511,6 +451,15 @@
           <button type="button" id="close-edit-snapshot" class="px-4 py-2.5 rounded-lg border border-white/20 text-white/80 hover:bg-white/10 text-sm font-semibold">Cancel</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Milestone info modal (what it takes to reach each FIRE milestone) -->
+  <div id="modal-milestone-info" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4" aria-hidden="true" data-modal>
+    <div class="glass-panel rounded-2xl p-6 lg:p-8 w-full max-w-md mx-4 shadow-2xl" role="dialog" onclick="event.stopPropagation()">
+      <h2 id="milestone-info-title" class="text-xl font-bold text-white mb-3">FIRE Milestone</h2>
+      <p id="milestone-info-body" class="text-white/80 text-sm leading-relaxed"></p>
+      <button type="button" id="close-milestone-info" class="mt-4 px-4 py-2 rounded-lg border border-white/20 text-white/80 hover:bg-white/10 text-sm font-semibold">Close</button>
     </div>
   </div>
 

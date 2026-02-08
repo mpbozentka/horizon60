@@ -432,11 +432,11 @@ function renderAccountList() {
     const weightOfTotal = totalNw > 0 ? (Math.abs(displayBalance) / totalNw * 100) : 0;
 
     html += `
-      <div class="glass-panel rounded-xl overflow-hidden">
+      <div class="glass-panel rounded-xl overflow-hidden ${isDebt ? 'border-l-4 border-red-500/60 bg-red-500/5' : ''}">
         <div class="flex items-center gap-1 w-full">
           <button type="button" data-account-id="${acc.id}" class="account-row flex-1 flex items-center justify-between p-4 text-left hover:bg-white/5 transition-colors">
             <div class="flex items-center gap-3">
-              <span class="material-symbols-outlined text-white/50">${getTypeIcon(acc.type)}</span>
+              <span class="material-symbols-outlined ${isDebt ? 'text-red-400/80' : 'text-white/50'}">${getTypeIcon(acc.type)}</span>
               <div>
                 <span class="font-bold text-white">${escapeHtml(acc.name)}</span>
                 <span class="text-white/50 text-sm ml-2">${acc.institution ? escapeHtml(acc.institution) : '—'}</span>
@@ -884,6 +884,33 @@ function init() {
     if (!Number.isNaN(index)) deleteSnapshot(index);
   });
 
+  document.getElementById('forecast-chart-mode-wrap')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.forecast-chart-mode');
+    if (!btn) return;
+    document.querySelectorAll('.forecast-chart-mode').forEach((b) => {
+      b.classList.remove('bg-primary', 'text-background-dark');
+      b.classList.add('text-white/60');
+    });
+    btn.classList.add('bg-primary', 'text-background-dark');
+    btn.classList.remove('text-white/60');
+    updateForecastChart();
+  });
+
+  document.body.addEventListener('click', (e) => {
+    const btn = e.target.closest('.milestone-info');
+    if (!btn) return;
+    const id = btn.dataset.milestoneId;
+    const m = FIRE_MILESTONES.find((x) => x.id === id);
+    if (m) {
+      const titleEl = document.getElementById('milestone-info-title');
+      const bodyEl = document.getElementById('milestone-info-body');
+      if (titleEl) titleEl.textContent = m.name;
+      if (bodyEl) bodyEl.textContent = m.description;
+      openModal('modal-milestone-info');
+    }
+  });
+  document.getElementById('close-milestone-info')?.addEventListener('click', () => closeModal('modal-milestone-info', document.body));
+
   // Close modals on backdrop click
   document.querySelectorAll('[data-modal]').forEach(modal => {
     modal.addEventListener('click', () => {
@@ -893,6 +920,271 @@ function init() {
 }
 
 const NET_WORTH_HISTORY_KEY = 'horizon60_netWorthHistory';
+const FORECAST_SETTINGS_KEY = 'horizon60_forecastSettings';
+/** Default contribution stop date: 60th birthday (April 21, 2055). Used when user has not set a stop date. */
+const DEFAULT_CONTRIBUTION_STOP_DATE = '2055-04-21';
+
+// ——— Forecast: time value of money ———
+// FV of annuity (ordinary): FV = PMT * [((1+i)^n - 1) / i]. With initial PV: FV = PV*(1+i)^n + PMT*[((1+i)^n - 1)/i].
+// Monthly rate from annual (compound): (1 + r_annual)^(1/12) - 1.
+
+/** Monthly compound rate from annual percentage (e.g. 8 → 0.0064). */
+function monthlyRateFromAnnual(annualPercent) {
+  const r = (Number(annualPercent) || 0) / 100;
+  return Math.pow(1 + r, 1 / 12) - 1;
+}
+
+/**
+ * Future value of current balance + monthly contributions (ordinary annuity: payments at end of month).
+ * @param {number} pv - Present value (current balance)
+ * @param {number} pmt - Monthly contribution
+ * @param {number} annualPercent - Expected annual return (e.g. 8 for 8%)
+ * @param {number} monthsContributing - Number of months contributions are made (then they stop)
+ * @param {number} totalMonths - Total months to project (growth continues after contributions stop)
+ */
+function futureValueWithContributions(pv, pmt, annualPercent, monthsContributing, totalMonths) {
+  const i = monthlyRateFromAnnual(annualPercent);
+  const pvNum = Number(pv) || 0;
+  const pmtNum = Number(pmt) || 0;
+  const n = Math.max(0, Math.floor(totalMonths));
+  const m = Math.max(0, Math.min(Math.floor(monthsContributing), n));
+
+  if (n === 0) return pvNum;
+  // Growth of initial balance over full period
+  const fvFromPv = pvNum * Math.pow(1 + i, n);
+  if (m === 0) return fvFromPv;
+  // FV of annuity for m months
+  const fvAnnuity = i === 0 ? pmtNum * m : pmtNum * (Math.pow(1 + i, m) - 1) / i;
+  // Value at month m: PV grown m months + annuity
+  const valueAtM = pvNum * Math.pow(1 + i, m) + fvAnnuity;
+  if (m >= n) return valueAtM;
+  // Grow from month m to n (no more contributions)
+  return valueAtM * Math.pow(1 + i, n - m);
+}
+
+/** Months from today until a given date (YYYY-MM-DD). If stopDate is null/empty, returns Infinity. */
+function monthsUntil(stopDate) {
+  if (!stopDate || typeof stopDate !== 'string') return Infinity;
+  const end = new Date(stopDate);
+  const start = new Date();
+  if (end <= start) return 0;
+  return Math.ceil((end - start) / (30.44 * 24 * 60 * 60 * 1000)); // approximate month
+}
+
+/**
+ * Months to pay off a loan with current balance pv, monthly payment pmt, and annual interest rate (e.g. 5 for 5%).
+ * Returns null if loan never pays off (payment <= interest) or invalid inputs.
+ */
+function monthsToPayoffLoan(pv, monthlyPmt, annualPercent) {
+  const pvNum = Number(pv) || 0;
+  const pmtNum = Number(monthlyPmt) || 0;
+  if (pvNum <= 0) return 0;
+  if (pmtNum <= 0) return null;
+  const r = monthlyRateFromAnnual(annualPercent);
+  const monthlyInterest = pvNum * r;
+  if (pmtNum <= monthlyInterest) return null; // never pays off
+  const n = Math.log(pmtNum / (pmtNum - pvNum * r)) / Math.log(1 + r);
+  const months = Math.ceil(n);
+  return months <= 0 ? null : months;
+}
+
+/** Last payment date (YYYY-MM-DD) for a debt account based on current balance, monthly payment, and interest rate. Returns null if no payoff. */
+function getDebtLastPaymentDate(accountId) {
+  const account = state.accounts.find((a) => a.id === accountId);
+  if (!account || account.type !== 'Debt') return null;
+  const balance = getAccountBalance(account);
+  const settings = getForecastSettings();
+  const acc = settings.accounts[accountId] || {};
+  const monthlyPmt = Number(acc.monthlyContribution) || 0;
+  const annual = Number(acc.annualReturnPercent) ?? 0;
+  const months = monthsToPayoffLoan(balance, monthlyPmt, annual);
+  if (months == null || months <= 0) return null;
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Get forecast settings: { horizonYears, annualExpenses, annualExpenseGrowthPercent, accounts: { ... } } */
+function getForecastSettings() {
+  try {
+    const raw = localStorage.getItem(FORECAST_SETTINGS_KEY);
+    if (!raw) return { horizonYears: 30, annualExpenses: 0, annualExpenseGrowthPercent: 3, accounts: {} };
+    const parsed = JSON.parse(raw);
+    return {
+      horizonYears: Number(parsed.horizonYears) || 30,
+      annualExpenses: Number(parsed.annualExpenses) || 0,
+      annualExpenseGrowthPercent: Number(parsed.annualExpenseGrowthPercent) ?? 3,
+      accounts: parsed.accounts && typeof parsed.accounts === 'object' ? parsed.accounts : {},
+    };
+  } catch (e) {
+    return { horizonYears: 30, annualExpenses: 0, annualExpenseGrowthPercent: 3, accounts: {} };
+  }
+}
+
+/** Projected annual expenses at yearsFromNow (today = year 0). */
+function getProjectedExpenses(yearsFromNow) {
+  const s = getForecastSettings();
+  const base = Number(s.annualExpenses) || 0;
+  const growth = Number(s.annualExpenseGrowthPercent) || 0;
+  return base * Math.pow(1 + growth / 100, yearsFromNow);
+}
+
+function saveForecastSettings(settings) {
+  try {
+    localStorage.setItem(FORECAST_SETTINGS_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.warn('Could not save forecast settings', e);
+  }
+}
+
+/** Projected balance for one account at yearsFromNow (0 = today). Returns amount in account terms (Debt = positive amount owed). */
+function getProjectedAccountBalance(accountId, yearsFromNow) {
+  const account = state.accounts.find((a) => a.id === accountId);
+  if (!account) return 0;
+  const pv = getAccountBalance(account); // positive for both assets and debt (debt = amount owed)
+  const settings = getForecastSettings();
+  const acc = settings.accounts[accountId] || {};
+  const horizonMonths = (settings.horizonYears || 30) * 12;
+  const totalMonths = Math.min(yearsFromNow * 12, horizonMonths);
+  const monthlyPmt = Number(acc.monthlyContribution) || 0;
+  const annual = Number(acc.annualReturnPercent) || 0;
+  let monthsContrib;
+  if (account.type === 'Debt') {
+    const payoffMonths = monthsToPayoffLoan(pv, monthlyPmt, annual);
+    monthsContrib = payoffMonths == null ? totalMonths : Math.min(payoffMonths, totalMonths);
+  } else {
+    monthsContrib = Math.min(
+      monthsUntil(acc.contributionStopDate || DEFAULT_CONTRIBUTION_STOP_DATE),
+      totalMonths
+    );
+  }
+  const pmt = account.type === 'Debt' ? -monthlyPmt : monthlyPmt;
+  const fv = futureValueWithContributions(pv, pmt, annual, monthsContrib, totalMonths);
+  return Math.max(0, fv); // debt can't go negative
+}
+
+/** Projected total net worth at yearsFromNow (sum of all accounts; debt subtracted). */
+function getProjectedTotalNetWorth(yearsFromNow) {
+  let total = 0;
+  for (const a of state.accounts) {
+    const bal = getProjectedAccountBalance(a.id, yearsFromNow);
+    total += a.type === 'Debt' ? -bal : bal;
+  }
+  return total;
+}
+
+/** Number of months contributions/payments were made from year 0 up to and including year y. */
+function getContributionMonthsUpToYear(accountId, years) {
+  const account = state.accounts.find((a) => a.id === accountId);
+  if (!account) return 0;
+  const settings = getForecastSettings();
+  const acc = settings.accounts[accountId] || {};
+  const totalMonths = Math.min(years * 12, (settings.horizonYears || 30) * 12);
+  if (account.type === 'Debt') {
+    const pv = getAccountBalance(account);
+    const monthlyPmt = Number(acc.monthlyContribution) || 0;
+    const payoffMonths = monthsToPayoffLoan(pv, monthlyPmt, Number(acc.annualReturnPercent) || 0);
+    return payoffMonths == null ? totalMonths : Math.min(totalMonths, payoffMonths);
+  }
+  return Math.min(totalMonths, monthsUntil(acc.contributionStopDate || DEFAULT_CONTRIBUTION_STOP_DATE));
+}
+
+/** Cumulative nominal contributions (assets) or payments (debt) from year 0 to year y, in dollars. */
+function getCumulativeContributions(accountId, years) {
+  const account = state.accounts.find((a) => a.id === accountId);
+  if (!account) return 0;
+  const settings = getForecastSettings();
+  const acc = settings.accounts[accountId] || {};
+  const monthlyPmt = Number(acc.monthlyContribution) || 0;
+  const months = getContributionMonthsUpToYear(accountId, years);
+  return monthlyPmt * months;
+}
+
+/** Cumulative interest earned (assets) or interest cost (debt, returned as negative) from year 0 to year y.
+ * Each year's interest = account value at start of year × annual return (e.g. $100k × 10% = $10k). */
+function getInterestEarnedAtYear(accountId, y) {
+  const account = state.accounts.find((a) => a.id === accountId);
+  if (!account) return 0;
+  const settings = getForecastSettings();
+  const acc = settings.accounts[accountId] || {};
+  const annualRate = (Number(acc.annualReturnPercent) || 0) / 100;
+  let cumulative = 0;
+  for (let t = 1; t <= y; t++) {
+    const balanceStartOfYear = getProjectedAccountBalance(accountId, t - 1);
+    cumulative += balanceStartOfYear * annualRate;
+  }
+  return account.type === 'Debt' ? -cumulative : cumulative;
+}
+
+/** Total interest earned (all accounts; debt interest cost is negative) at year y. */
+function getTotalInterestEarnedAtYear(y) {
+  let total = 0;
+  for (const a of state.accounts) total += getInterestEarnedAtYear(a.id, y);
+  return total;
+}
+
+/** First year (from now) when projected net worth reaches or exceeds target, or null. */
+function yearsToReachTarget(target) {
+  const current = getTotalNetWorth();
+  if (current >= target) return 0;
+  const settings = getForecastSettings();
+  const horizon = settings.horizonYears || 30;
+  for (let y = 1; y <= horizon; y++) {
+    if (getProjectedTotalNetWorth(y) >= target) return y;
+  }
+  return null;
+}
+
+/** FIRE milestone definitions for Horizon Milestones card (target = typical nest-egg goal). */
+const FIRE_MILESTONES = [
+  {
+    id: 'coast',
+    name: 'Coast FIRE',
+    target: 500000,
+    description: 'You’ve saved enough that, without adding more, your investments will grow to your full retirement number by retirement age. You can "coast" by covering only current expenses (e.g. with part-time or lower-stress work) while your nest egg compounds.',
+  },
+  {
+    id: 'lean',
+    name: 'Lean FIRE',
+    target: 875000,
+    description: 'Financial independence on a minimal budget (~$35k/year). Your passive income covers essential expenses only. Typically uses the 4% rule: 25× annual spending (e.g. $875k for $35k/year). Fastest path to leaving the workforce but requires frugality.',
+  },
+  {
+    id: 'fat',
+    name: 'Fat FIRE',
+    target: 2500000,
+    description: 'Financial independence with a comfortable or luxurious lifestyle (~$100k+/year). Requires a larger nest egg (e.g. $2.5M+ at 4%) and more aggressive saving, but allows a high standard of living in retirement.',
+  },
+];
+
+function renderHorizonMilestones() {
+  const container = document.getElementById('horizon-milestones-list');
+  if (!container) return;
+  const current = getTotalNetWorth();
+  const settings = getForecastSettings();
+  const horizon = settings.horizonYears || 30;
+  const projected = getProjectedTotalNetWorth(horizon);
+  container.innerHTML = FIRE_MILESTONES.map((m) => {
+    const pct = m.target > 0 ? Math.min(100, (current / m.target) * 100) : 0;
+    const years = yearsToReachTarget(m.target);
+    const statusStr = years === 0 ? 'Reached' : years != null ? `~${years} yrs` : `Projected $${(projected / 1e6).toFixed(2)}M in ${horizon}y`;
+    const statusClass = years === 0 ? 'text-primary' : 'text-white/70';
+    return `
+    <div class="flex items-center justify-between gap-2">
+      <span class="text-xs text-white/80 flex items-center gap-1">
+        ${escapeHtml(m.name)}
+        <button type="button" class="milestone-info rounded-full p-0.5 text-white/40 hover:text-primary hover:bg-white/10 focus:outline-none focus:ring-1 focus:ring-primary" data-milestone-id="${m.id}" aria-label="What is ${escapeHtml(m.name)}?">
+          <span class="material-symbols-outlined text-sm">info</span>
+        </button>
+      </span>
+      <span class="text-xs font-bold ${statusClass}">${statusStr}</span>
+    </div>
+    <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden -mt-1">
+      <div class="h-full bg-primary transition-all duration-300" style="width: ${pct}%"></div>
+    </div>
+    <p class="text-[10px] text-white/40 -mt-2">Target ${formatMoneyFull(m.target)} · ${years === 0 ? 'Reached' : years != null ? `Projected ${formatMoney(getProjectedTotalNetWorth(years))} in ${years}y` : `Projected ${formatMoney(projected)} in ${horizon}y`}</p>`;
+  }).join('');
+}
 
 /** @returns {Array<{ date: string, totalNetWorth: number, accounts: Array<{ id: string, name: string, balance: number }> }>} */
 function getNetWorthHistory() {
@@ -1104,6 +1396,269 @@ function saveEditedSnapshot() {
   renderSnapshotList();
 }
 
+/** Render per-account forecast settings in the Forecast tab. */
+function renderForecastAccountSettings() {
+  const container = document.getElementById('forecast-account-settings');
+  const horizonEl = document.getElementById('forecast-horizon-years');
+  if (!container) return;
+  const settings = getForecastSettings();
+  if (horizonEl) {
+    horizonEl.value = String(settings.horizonYears ?? 30);
+    horizonEl.onchange = () => {
+      const y = parseInt(horizonEl.value, 10);
+      if (!Number.isNaN(y) && y >= 1 && y <= 60) {
+        settings.horizonYears = y;
+        saveForecastSettings(settings);
+        renderHorizonMilestones();
+        updateForecastChart();
+      }
+    };
+  }
+  const expensesEl = document.getElementById('forecast-annual-expenses');
+  const growthEl = document.getElementById('forecast-expense-growth');
+  if (expensesEl) {
+    expensesEl.value = settings.annualExpenses ? String(settings.annualExpenses) : '';
+    expensesEl.onchange = () => {
+      const v = parseFloat(expensesEl.value);
+      const s = getForecastSettings();
+      s.annualExpenses = Number.isNaN(v) ? 0 : v;
+      saveForecastSettings(s);
+      updateForecastChart();
+    };
+  }
+  if (growthEl) {
+    growthEl.value = settings.annualExpenseGrowthPercent != null ? String(settings.annualExpenseGrowthPercent) : '';
+    growthEl.onchange = () => {
+      const v = parseFloat(growthEl.value);
+      const s = getForecastSettings();
+      s.annualExpenseGrowthPercent = Number.isNaN(v) ? 0 : v;
+      saveForecastSettings(s);
+      updateForecastChart();
+    };
+  }
+  if (!state.accounts.length) {
+    container.innerHTML = '<p class="text-white/50 text-sm">Add accounts on the Overview tab to set contributions and returns here.</p>';
+    return;
+  }
+  container.innerHTML = state.accounts
+    .map((acc) => {
+      const s = settings.accounts[acc.id] || {};
+      const monthly = s.monthlyContribution ?? '';
+      const annual = s.annualReturnPercent ?? '';
+      const stop = s.contributionStopDate ?? '';
+      const loanDate = s.loanOriginationDate ?? '';
+      const termMonths = s.termMonths ?? '';
+      const proj = getProjectedAccountBalance(acc.id, settings.horizonYears ?? 30);
+      const projLabel = acc.type === 'Debt' ? 'Projected balance owed' : 'Projected balance';
+      const isDebt = acc.type === 'Debt';
+      const lastPaymentDate = isDebt ? getDebtLastPaymentDate(acc.id) : null;
+      const lastPaymentStr = lastPaymentDate ? new Date(lastPaymentDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+      const cardClass = isDebt ? 'rounded-xl border border-red-500/20 bg-red-500/5 p-4 space-y-4' : 'rounded-xl border border-white/10 bg-white/5 p-4 space-y-4';
+      const badgeClass = isDebt ? 'text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400' : 'text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/70';
+      const projClass = isDebt ? 'text-red-400 font-bold text-sm' : 'text-primary font-bold text-sm';
+      const debtExtraFields = isDebt ? `
+      <div class="pt-2 border-t border-red-500/10">
+        <p class="text-xs font-semibold text-red-300/80 mb-2">Last payment date: <span class="text-red-200 font-bold" data-last-payment-date>${lastPaymentStr}</span></p>
+        <p class="text-[10px] text-red-300/60 mb-3">Based on current balance, monthly payment, and interest rate.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-red-300/80 mb-1">Loan origination date</label>
+            <input type="date" value="${loanDate}" data-forecast="loanOriginationDate" class="w-full rounded-lg bg-white/10 border border-red-500/20 px-3 py-2 text-white text-sm focus:border-red-400 focus:ring-1 focus:ring-red-400"/>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-red-300/80 mb-1">Term (months)</label>
+            <input type="number" min="1" step="1" placeholder="e.g. 360" value="${termMonths}" data-forecast="termMonths" class="w-full rounded-lg bg-white/10 border border-red-500/20 px-3 py-2 text-white text-sm focus:border-red-400 focus:ring-1 focus:ring-red-400"/>
+          </div>
+        </div>
+      </div>` : '';
+      const returnLabel = isDebt ? 'Interest rate (%)' : 'Predicted annual return (%)';
+      const stopDateField = isDebt ? '' : `
+        <div>
+          <label class="block text-xs font-semibold text-white/60 mb-1">Contribution stop date</label>
+          <input type="date" value="${stop || DEFAULT_CONTRIBUTION_STOP_DATE}" data-forecast="contributionStopDate" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary" title="Default: 60th birthday"/>
+        </div>`;
+      return `
+    <div class="${cardClass}" data-account-id="${acc.id}">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-white">${escapeHtml(acc.name)}</span>
+          <span class="${badgeClass}">${acc.type}</span>
+        </div>
+        <span class="${projClass}" data-projected-value>${projLabel}: ${formatMoneyFull(acc.type === 'Debt' ? -proj : proj)}</span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-white/60 mb-1">Monthly ${isDebt ? 'payment' : 'contribution'} ($)</label>
+          <input type="number" min="0" step="1" placeholder="0" value="${monthly}" data-forecast="monthlyContribution" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-white/60 mb-1">${returnLabel}</label>
+          <input type="number" min="-20" step="0.1" max="50" placeholder="e.g. 8" value="${annual}" data-forecast="annualReturnPercent" class="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary"/>
+        </div>
+        ${stopDateField}
+      </div>
+      ${debtExtraFields}
+    </div>`;
+    })
+    .join('');
+
+  container.querySelectorAll('[data-account-id]').forEach((card) => {
+    const accountId = card.dataset.accountId;
+    card.querySelectorAll('[data-forecast]').forEach((input) => {
+      const key = input.dataset.forecast;
+      const handler = () => {
+        const settings = getForecastSettings();
+        if (!settings.accounts[accountId]) settings.accounts[accountId] = {};
+        if (key === 'monthlyContribution' || key === 'annualReturnPercent' || key === 'termMonths') {
+          const num = parseFloat(input.value);
+          settings.accounts[accountId][key] = Number.isNaN(num) ? undefined : num;
+        } else {
+          settings.accounts[accountId][key] = input.value.trim() || null;
+        }
+        saveForecastSettings(settings);
+        const proj = getProjectedAccountBalance(accountId, settings.horizonYears ?? 30);
+        const acc = state.accounts.find((a) => a.id === accountId);
+        const labelEl = card.querySelector('[data-projected-value]');
+        if (labelEl && acc) {
+          const projLabel = acc.type === 'Debt' ? 'Projected balance owed' : 'Projected balance';
+          labelEl.textContent = `${projLabel}: ${formatMoneyFull(acc.type === 'Debt' ? -proj : proj)}`;
+        }
+        if (acc && acc.type === 'Debt') {
+          const lastDateEl = card.querySelector('[data-last-payment-date]');
+          if (lastDateEl) {
+            const d = getDebtLastPaymentDate(accountId);
+            lastDateEl.textContent = d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+          }
+        }
+        renderHorizonMilestones();
+        updateForecastChart();
+      };
+      input.addEventListener('input', handler);
+      input.addEventListener('change', handler);
+    });
+  });
+}
+
+let forecastChartInstance = null;
+
+/** Current forecast chart mode: 'balances' | 'interest'. */
+function getForecastChartMode() {
+  const active = document.querySelector('.forecast-chart-mode.bg-primary');
+  return active?.dataset.mode || 'balances';
+}
+
+/** Build or update the Forecast tab chart: net worth + each account + expenses, or interest earned + expenses. */
+function updateForecastChart() {
+  const canvas = document.getElementById('forecast-chart');
+  if (!canvas) return;
+  if (forecastChartInstance) {
+    forecastChartInstance.destroy();
+    forecastChartInstance = null;
+  }
+  const settings = getForecastSettings();
+  const horizon = settings.horizonYears || 30;
+  const mode = getForecastChartMode();
+  const labels = [];
+  for (let y = 0; y <= horizon; y++) labels.push(y === 0 ? 'Today' : `Year ${y}`);
+  const colors = [
+    '#0df20d',
+    '#00d4ff', '#e07a7a', '#fbbf24', '#a78bfa', '#34d399', '#f472b6', '#60a5fa',
+  ];
+  const datasets = [];
+
+  if (mode === 'interest') {
+    const totalInterestData = [];
+    for (let y = 0; y <= horizon; y++) totalInterestData.push(getTotalInterestEarnedAtYear(y));
+    datasets.push({
+      label: 'Total interest earned',
+      data: totalInterestData,
+      borderColor: colors[0],
+      backgroundColor: colors[0] + '20',
+      fill: false,
+      tension: 0.2,
+    });
+    state.accounts.forEach((acc, i) => {
+      const color = colors[(i + 1) % colors.length];
+      const values = [];
+      for (let y = 0; y <= horizon; y++) values.push(getInterestEarnedAtYear(acc.id, y));
+      datasets.push({
+        label: acc.name + (acc.type === 'Debt' ? ' (interest cost)' : ''),
+        data: values,
+        borderColor: color,
+        backgroundColor: color + '20',
+        fill: false,
+        tension: 0.2,
+      });
+    });
+  } else {
+    const nwData = [];
+    for (let y = 0; y <= horizon; y++) nwData.push(getProjectedTotalNetWorth(y));
+    datasets.push({
+      label: 'Total net worth',
+      data: nwData,
+      borderColor: colors[0],
+      backgroundColor: colors[0] + '20',
+      fill: false,
+      tension: 0.2,
+    });
+    state.accounts.forEach((acc, i) => {
+      const color = colors[(i + 1) % colors.length];
+      const values = [];
+      for (let y = 0; y <= horizon; y++) {
+        const bal = getProjectedAccountBalance(acc.id, y);
+        values.push(acc.type === 'Debt' ? -bal : bal);
+      }
+      datasets.push({
+        label: acc.name,
+        data: values,
+        borderColor: color,
+        backgroundColor: color + '20',
+        fill: false,
+        tension: 0.2,
+      });
+    });
+  }
+
+  const annualExpenses = Number(settings.annualExpenses) || 0;
+  if (annualExpenses > 0) {
+    const expData = [];
+    for (let y = 0; y <= horizon; y++) expData.push(getProjectedExpenses(y));
+    datasets.push({
+      label: 'Annual expenses (projected)',
+      data: expData,
+      borderColor: 'rgba(255,255,255,0.4)',
+      borderDash: [8, 4],
+      backgroundColor: 'transparent',
+      fill: false,
+      tension: 0.2,
+    });
+  }
+
+  const ctx = canvas.getContext('2d');
+  forecastChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.06)' },
+          ticks: { color: 'rgba(255,255,255,0.6)', maxRotation: 45 },
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.06)' },
+          ticks: {
+            color: 'rgba(255,255,255,0.6)',
+            callback: (v) => (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(0) + 'k' : v),
+          },
+        },
+      },
+    },
+  });
+}
+
 function showTab(tabId) {
   ['overview', 'history', 'forecast'].forEach(id => {
     const panel = document.getElementById('panel-' + id);
@@ -1122,6 +1677,11 @@ function showTab(tabId) {
   if (tabId === 'history') {
     updateNetWorthChart();
     renderSnapshotList();
+  }
+  if (tabId === 'forecast') {
+    renderForecastAccountSettings();
+    renderHorizonMilestones();
+    updateForecastChart();
   }
 }
 

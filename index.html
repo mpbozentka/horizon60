@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Horizon 60 Wealth Engine Dashboard</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#0df20d",
+            "accent-blue": "#00d4ff",
+            "muted-coral": "#e07a7a",
+            "background-light": "#f5f8f5",
+            "background-dark": "#050a05",
+            "card-glass": "rgba(255, 255, 255, 0.03)",
+          },
+          fontFamily: {
+            "display": ["Manrope", "sans-serif"]
+          },
+          borderRadius: {
+            "DEFAULT": "0.5rem",
+            "lg": "1rem",
+            "xl": "1.5rem",
+            "full": "9999px"
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    body { font-family: 'Manrope', sans-serif; }
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .neon-glow-green {
+      box-shadow: 0 0 15px rgba(13, 242, 13, 0.3);
+    }
+    .neon-glow-blue {
+      box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+    }
+    .sparkline-svg {
+      stroke-dasharray: 100;
+      stroke-dashoffset: 0;
+    }
+    .neon-text-green {
+      text-shadow: 0 0 20px rgba(13, 242, 13, 0.4);
+    }
+    .badge-profit { color: #0df20d; font-weight: 700; }
+    .badge-loss { color: #e07a7a; font-weight: 700; }
+  </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen font-display">
+  <div class="relative flex min-h-screen w-full flex-col overflow-x-hidden">
+    <!-- Header -->
+    <header class="flex items-center justify-between border-b border-white/10 px-8 py-4 sticky top-0 bg-background-dark/80 backdrop-blur-md z-50">
+      <div class="flex items-center gap-8">
+        <div class="flex items-center gap-3 text-primary">
+          <div class="size-8">
+            <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <path clip-rule="evenodd" d="M47.2426 24L24 47.2426L0.757355 24L24 0.757355L47.2426 24ZM12.2426 21H35.7574L24 9.24264L12.2426 21Z" fill="currentColor" fill-rule="evenodd"></path>
+            </svg>
+          </div>
+          <h2 class="text-xl font-extrabold tracking-tight">HORIZON <span class="text-white">60</span></h2>
+        </div>
+        <nav class="hidden md:flex items-center gap-6">
+          <a class="text-white/60 hover:text-primary transition-colors text-sm font-semibold" href="#">Engine</a>
+          <a class="text-white/60 hover:text-primary transition-colors text-sm font-semibold" href="#">Simulations</a>
+          <a class="text-primary text-sm font-semibold border-b-2 border-primary pb-1" href="#">Assets</a>
+          <a class="text-white/60 hover:text-primary transition-colors text-sm font-semibold" href="#">Settings</a>
+        </nav>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="hidden lg:flex items-center bg-white/5 rounded-xl px-3 py-1.5 border border-white/10">
+          <span class="material-symbols-outlined text-primary text-sm mr-2">bolt</span>
+          <span class="text-xs font-bold uppercase tracking-widest text-primary">Freedom Score: 72</span>
+        </div>
+        <button id="sync-prices-btn" class="bg-primary hover:bg-primary/80 text-background-dark px-4 py-2 rounded-lg font-bold text-sm transition-all flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">sync</span>
+          Sync Data
+        </button>
+        <div class="size-10 rounded-full border-2 border-primary p-0.5">
+          <div class="w-full h-full rounded-full bg-cover bg-center" data-alt="User profile avatar circle" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCipIJ6AD7pekOv373CTlxjKfQ_3XwgaozMgnOdWmlp40rjdb4GOtRwRa0JG4ykG-9NNF_UxQmm89wibBcuYo6cFpNeIEj1GSM6XcW3mS8WMJnXrlOPJjBBGCP2q5wEJhGjjNwC9pxSsS6qj2a9pjvvBem1upwHuN9bV_MNYlVekiK29ik4I0rE0L5iI34fpJQLn4SPimMMOrVOzwyuJ7hwOwz4tuLbbA8Kv3IRB_nCtkmk6qhhDYOKGWdwESI9KMnqYJ7iv7HZIEhG')"></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-[1440px] mx-auto w-full p-6 lg:p-10 grid grid-cols-12 gap-6">
+      <!-- Left Column: Core Dashboard -->
+      <div class="col-span-12 lg:col-span-9 space-y-8">
+        <!-- Current Pulse Section -->
+        <section>
+          <div class="text-center mb-6">
+            <p class="text-white/50 text-xs uppercase tracking-[0.3em] font-bold mb-2">Aggregate Net Worth</p>
+            <h1 id="net-worth-hero" class="text-5xl lg:text-7xl font-extrabold tracking-tighter text-white neon-text-green">
+              $0.<span class="text-white/30 text-3xl">00</span>
+            </h1>
+            <div class="mt-3 flex items-center justify-center gap-2">
+              <span class="flex items-center text-primary font-bold text-sm">
+                <span class="material-symbols-outlined text-sm mr-1">trending_up</span><span id="net-worth-change">—</span>
+              </span>
+              <span class="text-white/40 text-sm">vs last month</span>
+            </div>
+          </div>
+          <div class="flex justify-end mb-4">
+            <button id="add-account-btn" type="button" class="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 px-4 py-2 rounded-lg font-bold text-sm transition-all flex items-center gap-2">
+              <span class="material-symbols-outlined text-sm">add</span>
+              Add New Account
+            </button>
+          </div>
+          <div id="summary-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Filled by JS -->
+          </div>
+          <!-- Account list with expandable detail -->
+          <div class="mt-8">
+            <h3 class="text-sm font-bold text-white/80 mb-4 uppercase tracking-wider">Your Accounts</h3>
+            <div id="account-list" class="space-y-2">
+              <!-- Filled by JS -->
+            </div>
+          </div>
+        </section>
+
+        <!-- Freedom Slider Workspace -->
+        <section class="glass-panel rounded-2xl p-6 lg:p-8">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+            <div>
+              <h2 class="text-xl font-bold text-white">Freedom Engine Workspace</h2>
+              <p class="text-white/50 text-sm">Adjust parameters to simulate your exit timeline.</p>
+            </div>
+            <div class="flex bg-white/5 p-1 rounded-xl border border-white/10 self-end md:self-auto">
+              <button class="px-4 py-1.5 rounded-lg text-xs font-bold bg-white/10 text-white">LEAN FIRE</button>
+              <button class="px-4 py-1.5 rounded-lg text-xs font-bold text-white/40 hover:text-white transition-colors">FAT FIRE</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div class="space-y-6">
+              <div class="space-y-3">
+                <div class="flex justify-between">
+                  <label class="text-sm font-semibold text-white/80">Monthly Injection</label>
+                  <span class="text-primary font-bold">$5,500</span>
+                </div>
+                <input class="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" type="range" min="500" max="20000" step="100"/>
+                <p class="text-[10px] text-white/30 uppercase tracking-widest font-bold">Contribution Amount</p>
+              </div>
+              <div class="space-y-3">
+                <div class="flex justify-between">
+                  <label class="text-sm font-semibold text-white/80">Expected Yield</label>
+                  <span class="text-primary font-bold">8.4%</span>
+                </div>
+                <input class="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" type="range" min="1" max="15" step="0.1"/>
+                <p class="text-[10px] text-white/30 uppercase tracking-widest font-bold">Annual ROI Projection</p>
+              </div>
+            </div>
+            <div class="space-y-6 border-l border-white/10 pl-0 md:pl-8">
+              <div class="space-y-3">
+                <div class="flex justify-between">
+                  <label class="text-sm font-semibold text-accent-blue/80">BTC Multiplier</label>
+                  <span class="text-accent-blue font-bold">2.5x</span>
+                </div>
+                <input class="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent-blue" type="range" min="1" max="10" step="0.5"/>
+                <p class="text-[10px] text-white/30 uppercase tracking-widest font-bold">Crypto Allocation Weight</p>
+              </div>
+              <div class="space-y-3">
+                <div class="flex justify-between">
+                  <label class="text-sm font-semibold text-white/80">Withdrawal Rate</label>
+                  <span class="text-primary font-bold">3.5%</span>
+                </div>
+                <input class="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" type="range" min="1" max="7" step="0.1"/>
+                <p class="text-[10px] text-white/30 uppercase tracking-widest font-bold">Safe SWR percentage</p>
+              </div>
+            </div>
+            <div class="bg-primary/5 rounded-xl border border-primary/20 p-5 flex flex-col justify-center text-center">
+              <p class="text-primary/60 text-[10px] font-bold uppercase tracking-widest mb-1">Time to Freedom</p>
+              <h4 class="text-4xl font-extrabold text-primary">12.4 YRS</h4>
+              <p class="text-white/40 text-xs mt-2 italic">Age 42.4 — Freedom Date: Sept 2036</p>
+              <div class="mt-4 pt-4 border-t border-primary/10">
+                <button class="w-full bg-primary/20 hover:bg-primary/30 text-primary py-2 rounded-lg text-xs font-extrabold uppercase transition-all">Lock Scenario</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Future Horizon Projection -->
+        <section class="glass-panel rounded-2xl p-6 lg:p-8 relative overflow-hidden">
+          <div class="flex items-center justify-between mb-8">
+            <div>
+              <h2 class="text-xl font-bold text-white">Future Horizon Projection</h2>
+              <p class="text-white/50 text-sm">Wealth trajectory vs. Passive Expense floor.</p>
+            </div>
+            <div class="flex items-center gap-4 text-xs font-bold">
+              <div class="flex items-center gap-2">
+                <div class="size-3 rounded-full bg-primary"></div>
+                <span class="text-white/60">Portfolio</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="size-3 rounded-full bg-white/20"></div>
+                <span class="text-white/60">Expenses</span>
+              </div>
+            </div>
+          </div>
+          <!-- Area Chart Visual -->
+          <div class="relative h-[300px] w-full">
+            <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 1200 300">
+              <defs>
+                <linearGradient id="areaGradient" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#0df20d" stop-opacity="0.3"></stop>
+                  <stop offset="100%" stop-color="#0df20d" stop-opacity="0"></stop>
+                </linearGradient>
+              </defs>
+              <!-- Baseline -->
+              <line x1="0" y1="280" x2="1200" y2="280" stroke="rgba(255,255,255,0.05)" stroke-width="1"></line>
+              <!-- Expense Line -->
+              <path d="M0 260 L 1200 200" fill="none" stroke="rgba(255,255,255,0.2)" stroke-dasharray="8 8" stroke-width="2"></path>
+              <!-- Assets Area -->
+              <path d="M0 260 C 200 250, 400 240, 600 150 S 1000 50, 1200 10 L 1200 300 L 0 300 Z" fill="url(#areaGradient)"></path>
+              <!-- Assets Line -->
+              <path d="M0 260 C 200 250, 400 240, 600 150 S 1000 50, 1200 10" fill="none" stroke="#0df20d" stroke-width="3"></path>
+              <!-- Magic Moment Marker -->
+              <line x1="600" y1="0" x2="600" y2="300" stroke="#0df20d" stroke-width="2"></line>
+              <circle class="neon-glow-green" cx="600" cy="215" r="6" fill="#0df20d"></circle>
+            </svg>
+            <!-- Labels -->
+            <div class="absolute bottom-[-10px] w-full flex justify-between text-[10px] text-white/30 font-bold px-2">
+              <span>AGE 30</span>
+              <span>35</span>
+              <span>40</span>
+              <span>45</span>
+              <span>50</span>
+              <span>55</span>
+              <span>60</span>
+            </div>
+            <!-- Magic Moment Tooltip -->
+            <div class="absolute left-1/2 top-4 -translate-x-1/2 bg-primary px-3 py-1.5 rounded-lg">
+              <p class="text-background-dark text-[10px] font-extrabold uppercase">Magic Moment: Age 42.4</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Right Column: Sidebar -->
+      <aside class="col-span-12 lg:col-span-3 space-y-6">
+        <!-- Encouragement Engine -->
+        <div class="space-y-4">
+          <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-white/40 px-2">Encouragement Engine</h3>
+          <!-- Nudge 1 -->
+          <div class="bg-primary/10 border border-primary/20 p-4 rounded-xl relative overflow-hidden">
+            <div class="flex gap-3 relative z-10">
+              <span class="material-symbols-outlined text-primary">lightbulb</span>
+              <div>
+                <p class="text-sm font-bold text-white">Efficiency Opportunity</p>
+                <p class="text-xs text-white/60 mt-1">Increase contribution by 2% to hit freedom 18 months earlier!</p>
+              </div>
+            </div>
+            <div class="absolute -right-2 -bottom-2 opacity-5 scale-150 rotate-12">
+              <span class="material-symbols-outlined text-primary text-6xl">trending_up</span>
+            </div>
+          </div>
+          <!-- Nudge 2 -->
+          <div class="bg-accent-blue/10 border border-accent-blue/20 p-4 rounded-xl relative overflow-hidden">
+            <div class="flex gap-3 relative z-10">
+              <span class="material-symbols-outlined text-accent-blue">currency_bitcoin</span>
+              <div>
+                <p class="text-sm font-bold text-white">Bitcoin Strategy</p>
+                <p class="text-xs text-white/60 mt-1">A one-time $10k BTC buy-in today accelerates exit by 6 months.</p>
+              </div>
+            </div>
+            <div class="absolute -right-2 -bottom-2 opacity-5 scale-150 rotate-12">
+              <span class="material-symbols-outlined text-accent-blue text-6xl">token</span>
+            </div>
+          </div>
+          <!-- Nudge 3 -->
+          <div class="glass-panel p-4 rounded-xl">
+            <div class="flex gap-3">
+              <span class="material-symbols-outlined text-white/40">security</span>
+              <div>
+                <p class="text-sm font-bold text-white">Risk Buffer</p>
+                <p class="text-xs text-white/60 mt-1">Emergency fund is overfunded. Consider reallocating $5k to index funds.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Snapshot Stats -->
+        <div class="glass-panel p-6 rounded-2xl">
+          <h3 class="text-sm font-bold text-white mb-4">Horizon Milestones</h3>
+          <div class="space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-white/40">Coast FIRE</span>
+              <span class="text-xs font-bold text-primary">REACHED</span>
+            </div>
+            <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <div class="h-full bg-primary w-full"></div>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-white/40">Lean FIRE</span>
+              <span class="text-xs font-bold text-white">82%</span>
+            </div>
+            <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <div class="h-full bg-primary w-[82%]"></div>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-white/40">Fat FIRE</span>
+              <span class="text-xs font-bold text-white">41%</span>
+            </div>
+            <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <div class="h-full bg-primary w-[41%]"></div>
+            </div>
+          </div>
+          <button class="w-full mt-6 py-3 rounded-xl border border-white/10 text-white/60 text-xs font-bold hover:bg-white/5 transition-colors uppercase tracking-widest">View Detailed Plan</button>
+        </div>
+
+        <!-- Recent Events -->
+        <div class="px-2">
+          <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-white/40 mb-4">Asset Pulse</h3>
+          <div class="space-y-4">
+            <div class="flex gap-3 items-center">
+              <div class="size-2 rounded-full bg-primary neon-glow-green"></div>
+              <span class="text-xs text-white/60">Dividend payout: VTSAX +$1,240</span>
+            </div>
+            <div class="flex gap-3 items-center">
+              <div class="size-2 rounded-full bg-accent-blue neon-glow-blue"></div>
+              <span class="text-xs text-white/60">BTC Monthly DCA: $1,500</span>
+            </div>
+            <div class="flex gap-3 items-center">
+              <div class="size-2 rounded-full bg-white/20"></div>
+              <span class="text-xs text-white/60">Tax Loss Harvested: $3,200</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Modal: Add New Account -->
+  <div id="modal-add-account" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4" aria-hidden="true" data-modal>
+    <div class="glass-panel rounded-2xl p-6 lg:p-8 w-full max-w-md mx-4 shadow-2xl" role="dialog" aria-labelledby="modal-add-account-title" onclick="event.stopPropagation()">
+      <h2 id="modal-add-account-title" class="text-xl font-bold text-white mb-6">Add New Account</h2>
+      <form id="form-add-account" class="space-y-4">
+        <div>
+          <label for="account-name" class="block text-sm font-semibold text-white/80 mb-1">Account Name</label>
+          <input id="account-name" type="text" required placeholder="e.g. Chase Savings" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+        </div>
+        <div>
+          <label for="account-type" class="block text-sm font-semibold text-white/80 mb-1">Type</label>
+          <select id="account-type" required class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white focus:border-primary focus:ring-1 focus:ring-primary">
+            <option value="Cash">Cash</option>
+            <option value="Retirement">Retirement</option>
+            <option value="Crypto">Crypto</option>
+            <option value="Debt">Debt</option>
+          </select>
+        </div>
+        <div>
+          <label for="account-institution" class="block text-sm font-semibold text-white/80 mb-1">Institution</label>
+          <input id="account-institution" type="text" required placeholder="e.g. Fidelity" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+        </div>
+        <div class="flex gap-3 pt-4">
+          <button type="submit" class="flex-1 bg-primary hover:bg-primary/80 text-background-dark py-2.5 rounded-lg font-bold text-sm">Add Account</button>
+          <button type="button" id="close-add-account" class="px-4 py-2.5 rounded-lg border border-white/20 text-white/80 hover:bg-white/10 text-sm font-semibold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Add Holding -->
+  <div id="modal-add-holding" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4" aria-hidden="true" data-modal>
+    <div class="glass-panel rounded-2xl p-6 lg:p-8 w-full max-w-md mx-4 shadow-2xl" role="dialog" aria-labelledby="modal-add-holding-title" onclick="event.stopPropagation()">
+      <h2 id="modal-add-holding-title" class="text-xl font-bold text-white mb-6">Add Holding</h2>
+      <form id="form-add-holding" class="space-y-4">
+        <input id="holding-account-id" type="hidden"/>
+        <!-- Cash/Debt: balance only -->
+        <div id="holding-field-balance" class="hidden">
+          <label for="holding-balance" class="block text-sm font-semibold text-white/80 mb-1">Balance ($)</label>
+          <input id="holding-balance" type="number" step="0.01" min="0" placeholder="0.00" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+        </div>
+        <!-- Retirement/Crypto: ticker, quantity, purchase price (avg cost basis) -->
+        <div id="holding-fields-security" class="hidden space-y-4">
+          <div>
+            <label for="holding-ticker" class="block text-sm font-semibold text-white/80 mb-1">Ticker Symbol</label>
+            <input id="holding-ticker" type="text" placeholder="e.g. VTSAX, BTC" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+          </div>
+          <div>
+            <label for="holding-quantity" class="block text-sm font-semibold text-white/80 mb-1">Quantity</label>
+            <input id="holding-quantity" type="number" step="any" min="0" placeholder="0" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+          </div>
+          <div>
+            <label for="holding-purchase-price" class="block text-sm font-semibold text-white/80 mb-1">Purchase Price (Avg Cost Basis) $</label>
+            <input id="holding-purchase-price" type="number" step="0.01" min="0" placeholder="Per share/unit" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+          </div>
+        </div>
+        <div class="flex gap-3 pt-4">
+          <button type="submit" class="flex-1 bg-primary hover:bg-primary/80 text-background-dark py-2.5 rounded-lg font-bold text-sm">Add Holding</button>
+          <button type="button" id="close-add-holding" class="px-4 py-2.5 rounded-lg border border-white/20 text-white/80 hover:bg-white/10 text-sm font-semibold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- API Key modal (shown when user clicks Sync and no key set) -->
+  <div id="modal-api-key" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4" aria-hidden="true" data-modal>
+    <div class="glass-panel rounded-2xl p-6 lg:p-8 w-full max-w-md mx-4 shadow-2xl" onclick="event.stopPropagation()">
+      <h2 class="text-xl font-bold text-white mb-2">Live Stock & Crypto Prices</h2>
+      <p class="text-white/60 text-sm mb-4">Enter a free Alpha Vantage API key to fetch live prices for Retirement and Crypto holdings. Get one at <a href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noopener" class="text-primary underline">alphavantage.co</a>.</p>
+      <div class="flex gap-2">
+        <input id="api-key-input" type="password" placeholder="Your API key" class="flex-1 rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40"/>
+        <button type="button" id="save-api-key" class="bg-primary hover:bg-primary/80 text-background-dark px-4 py-2.5 rounded-lg font-bold text-sm">Save</button>
+      </div>
+      <button type="button" id="skip-api-key" class="mt-3 text-white/50 hover:text-white text-sm">Skip (use cost basis as fallback)</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

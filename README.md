@@ -2,6 +2,8 @@
 
 A dark-themed wealth and FIRE (Financial Independence, Retire Early) dashboard with aggregate net worth, asset cards, Freedom Engine workspace, and projection chart.
 
+**Single source of truth:** Edit the wealth UI only in this folder (`index.html`, `app.js`, `import-template.csv`). The auth app in `clerk-nextjs/` uses **symlinks** to these same files—there is no second copy. Change the root files and the Clerk app sees it immediately. No copy step.
+
 ## Run locally
 
 **Option 1 — open in browser**  
@@ -39,4 +41,4 @@ Then open **http://localhost:3000** in your browser.
 
 ### Live prices (optional)
 
-Get a free API key at [Alpha Vantage](https://www.alphavantage.co/support/#api-key), then click **Sync Data** and enter it when prompted. Prices are fetched via Alpha Vantage’s GLOBAL_QUOTE endpoint (stocks/ETFs). Crypto symbols may work where supported. The app uses a CORS proxy so it works from the browser without a backend.
+Get a free API key at [Finnhub](https://finnhub.io/register), then click **Sync Data** and enter it when prompted. Prices are fetched via Finnhub’s quote API (stocks, ETFs, and crypto). Use US symbols for stocks (e.g. AAPL); for crypto, Finnhub may require an exchange prefix (e.g. BINANCE:BTCUSDT).

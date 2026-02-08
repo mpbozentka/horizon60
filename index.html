@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Horizon 60 Wealth Engine Dashboard</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
   <script id="tailwind-config">
@@ -70,11 +71,10 @@
           </div>
           <h2 class="text-xl font-extrabold tracking-tight">HORIZON <span class="text-white">60</span></h2>
         </div>
-        <nav class="hidden md:flex items-center gap-6">
-          <a class="text-white/60 hover:text-primary transition-colors text-sm font-semibold" href="#">Engine</a>
-          <a class="text-white/60 hover:text-primary transition-colors text-sm font-semibold" href="#">Simulations</a>
-          <a class="text-primary text-sm font-semibold border-b-2 border-primary pb-1" href="#">Assets</a>
-          <a class="text-white/60 hover:text-primary transition-colors text-sm font-semibold" href="#">Settings</a>
+        <nav class="flex items-center gap-1 rounded-xl bg-white/5 p-1 border border-white/10">
+          <button type="button" data-tab="overview" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition-colors bg-primary text-background-dark">Overview</button>
+          <button type="button" data-tab="history" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold text-white/60 hover:text-white transition-colors">History</button>
+          <button type="button" data-tab="forecast" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold text-white/60 hover:text-white transition-colors">Forecast</button>
         </nav>
       </div>
       <div class="flex items-center gap-4">
@@ -92,10 +92,10 @@
       </div>
     </header>
 
-    <main class="flex-1 max-w-[1440px] mx-auto w-full p-6 lg:p-10 grid grid-cols-12 gap-6">
-      <!-- Left Column: Core Dashboard -->
+    <main class="flex-1 max-w-[1440px] mx-auto w-full p-6 lg:p-10">
+      <!-- Tab: Overview -->
+      <div id="panel-overview" class="tab-panel grid grid-cols-12 gap-6">
       <div class="col-span-12 lg:col-span-9 space-y-8">
-        <!-- Current Pulse Section -->
         <section>
           <div class="text-center mb-6">
             <p class="text-white/50 text-xs uppercase tracking-[0.3em] font-bold mb-2">Aggregate Net Worth</p>
@@ -109,8 +109,8 @@
               <span class="text-white/40 text-sm">vs last month</span>
             </div>
           </div>
-          <div class="flex justify-end mb-4">
-            <button id="add-account-btn" type="button" class="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 px-4 py-2 rounded-lg font-bold text-sm transition-all flex items-center gap-2">
+          <div class="flex flex-wrap justify-end gap-3 mb-4">
+            <button id="add-account-btn" type="button" onclick="typeof openAddAccountModal === 'function' && openAddAccountModal()" class="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 px-4 py-2 rounded-lg font-bold text-sm transition-all flex items-center gap-2">
               <span class="material-symbols-outlined text-sm">add</span>
               Add New Account
             </button>
@@ -126,7 +126,38 @@
             </div>
           </div>
         </section>
+      </div>
+      <aside class="col-span-12 lg:col-span-3 space-y-6 hidden lg:block">
+        <p class="text-white/40 text-sm">Overview shows your net worth and accounts. Use <strong>History</strong> to track over time, <strong>Forecast</strong> for planning.</p>
+      </aside>
+      </div>
 
+      <!-- Tab: History (Net worth over time) -->
+      <div id="panel-history" class="tab-panel hidden">
+        <div class="max-w-4xl mx-auto space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <h2 class="text-xl font-bold text-white">Net Worth Over Time</h2>
+            <button type="button" id="record-snapshot-btn" class="bg-primary hover:bg-primary/80 text-background-dark px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2">
+              <span class="material-symbols-outlined text-sm">add_circle</span>
+              Record snapshot
+            </button>
+          </div>
+          <p class="text-white/50 text-sm">Record a snapshot to capture your current net worth and account balances. Each line is an account or total net worth.</p>
+          <div class="glass-panel rounded-2xl p-6 relative overflow-hidden h-[360px]">
+            <canvas id="net-worth-chart" aria-label="Net worth and account balances over time"></canvas>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white/80 mb-3 uppercase tracking-wider">Snapshot history</h3>
+            <div id="snapshot-list" class="space-y-2">
+              <!-- Filled by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Forecast (Freedom Engine, projection, sidebar) -->
+      <div id="panel-forecast" class="tab-panel hidden grid grid-cols-12 gap-6">
+      <div class="col-span-12 lg:col-span-9 space-y-8">
         <!-- Freedom Slider Workspace -->
         <section class="glass-panel rounded-2xl p-6 lg:p-8">
           <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
@@ -243,45 +274,16 @@
           </div>
         </section>
       </div>
-
-      <!-- Right Column: Sidebar -->
       <aside class="col-span-12 lg:col-span-3 space-y-6">
         <!-- Encouragement Engine -->
         <div class="space-y-4">
           <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-white/40 px-2">Encouragement Engine</h3>
-          <!-- Nudge 1 -->
-          <div class="bg-primary/10 border border-primary/20 p-4 rounded-xl relative overflow-hidden">
-            <div class="flex gap-3 relative z-10">
-              <span class="material-symbols-outlined text-primary">lightbulb</span>
-              <div>
-                <p class="text-sm font-bold text-white">Efficiency Opportunity</p>
-                <p class="text-xs text-white/60 mt-1">Increase contribution by 2% to hit freedom 18 months earlier!</p>
-              </div>
-            </div>
-            <div class="absolute -right-2 -bottom-2 opacity-5 scale-150 rotate-12">
-              <span class="material-symbols-outlined text-primary text-6xl">trending_up</span>
-            </div>
-          </div>
-          <!-- Nudge 2 -->
-          <div class="bg-accent-blue/10 border border-accent-blue/20 p-4 rounded-xl relative overflow-hidden">
-            <div class="flex gap-3 relative z-10">
-              <span class="material-symbols-outlined text-accent-blue">currency_bitcoin</span>
-              <div>
-                <p class="text-sm font-bold text-white">Bitcoin Strategy</p>
-                <p class="text-xs text-white/60 mt-1">A one-time $10k BTC buy-in today accelerates exit by 6 months.</p>
-              </div>
-            </div>
-            <div class="absolute -right-2 -bottom-2 opacity-5 scale-150 rotate-12">
-              <span class="material-symbols-outlined text-accent-blue text-6xl">token</span>
-            </div>
-          </div>
-          <!-- Nudge 3 -->
           <div class="glass-panel p-4 rounded-xl">
             <div class="flex gap-3">
-              <span class="material-symbols-outlined text-white/40">security</span>
+              <span class="material-symbols-outlined text-white/40">lightbulb</span>
               <div>
-                <p class="text-sm font-bold text-white">Risk Buffer</p>
-                <p class="text-xs text-white/60 mt-1">Emergency fund is overfunded. Consider reallocating $5k to index funds.</p>
+                <p class="text-sm font-bold text-white">Your insights will show here</p>
+                <p class="text-xs text-white/60 mt-1">Add accounts and holdings to get personalized tips and opportunities.</p>
               </div>
             </div>
           </div>
@@ -293,48 +295,38 @@
           <div class="space-y-4">
             <div class="flex items-center justify-between">
               <span class="text-xs text-white/40">Coast FIRE</span>
-              <span class="text-xs font-bold text-primary">REACHED</span>
+              <span class="text-xs font-bold text-white/50">—</span>
             </div>
             <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-              <div class="h-full bg-primary w-full"></div>
+              <div class="h-full bg-primary w-0"></div>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-xs text-white/40">Lean FIRE</span>
-              <span class="text-xs font-bold text-white">82%</span>
+              <span class="text-xs font-bold text-white/50">—</span>
             </div>
             <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-              <div class="h-full bg-primary w-[82%]"></div>
+              <div class="h-full bg-primary w-0"></div>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-xs text-white/40">Fat FIRE</span>
-              <span class="text-xs font-bold text-white">41%</span>
+              <span class="text-xs font-bold text-white/50">—</span>
             </div>
             <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-              <div class="h-full bg-primary w-[41%]"></div>
+              <div class="h-full bg-primary w-0"></div>
             </div>
           </div>
-          <button class="w-full mt-6 py-3 rounded-xl border border-white/10 text-white/60 text-xs font-bold hover:bg-white/5 transition-colors uppercase tracking-widest">View Detailed Plan</button>
+          <p class="text-[10px] text-white/40 mt-4">Add accounts to track progress toward your goals.</p>
         </div>
 
         <!-- Recent Events -->
         <div class="px-2">
           <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-white/40 mb-4">Asset Pulse</h3>
           <div class="space-y-4">
-            <div class="flex gap-3 items-center">
-              <div class="size-2 rounded-full bg-primary neon-glow-green"></div>
-              <span class="text-xs text-white/60">Dividend payout: VTSAX +$1,240</span>
-            </div>
-            <div class="flex gap-3 items-center">
-              <div class="size-2 rounded-full bg-accent-blue neon-glow-blue"></div>
-              <span class="text-xs text-white/60">BTC Monthly DCA: $1,500</span>
-            </div>
-            <div class="flex gap-3 items-center">
-              <div class="size-2 rounded-full bg-white/20"></div>
-              <span class="text-xs text-white/60">Tax Loss Harvested: $3,200</span>
-            </div>
+            <p class="text-xs text-white/50">Recent activity will appear here once you add accounts and holdings.</p>
           </div>
         </div>
       </aside>
+      </div>
     </main>
   </div>
 
@@ -342,9 +334,9 @@
   <div id="modal-add-account" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4" aria-hidden="true" data-modal>
     <div class="glass-panel rounded-2xl p-6 lg:p-8 w-full max-w-md mx-4 shadow-2xl" role="dialog" aria-labelledby="modal-add-account-title" onclick="event.stopPropagation()">
       <h2 id="modal-add-account-title" class="text-xl font-bold text-white mb-6">Add New Account</h2>
-      <form id="form-add-account" class="space-y-4">
+      <form id="form-add-account" class="space-y-4" onsubmit="event.preventDefault(); if (typeof window.submitAddAccount === 'function') window.submitAddAccount(); return false;">
         <div>
-          <label for="account-name" class="block text-sm font-semibold text-white/80 mb-1">Account Name</label>
+          <label for="account-name" class="block text-sm font-semibold text-white/80 mb-1">Account Name <span class="text-white/50 font-normal">(required)</span></label>
           <input id="account-name" type="text" required placeholder="e.g. Chase Savings" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
         </div>
         <div>
@@ -357,12 +349,57 @@
           </select>
         </div>
         <div>
-          <label for="account-institution" class="block text-sm font-semibold text-white/80 mb-1">Institution</label>
-          <input id="account-institution" type="text" required placeholder="e.g. Fidelity" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+          <label for="account-institution" class="block text-sm font-semibold text-white/80 mb-1">Institution <span class="text-white/50 font-normal">optional</span></label>
+          <input id="account-institution" type="text" placeholder="e.g. Fidelity" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+        </div>
+        <div class="border-t border-white/20 pt-4 mt-4 flex flex-wrap gap-2">
+          <a id="download-template-add-account" href="import-template.csv" download="horizon60-import-template.csv" class="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-white/80 hover:bg-white/10 text-sm font-semibold transition-colors">
+            <span class="material-symbols-outlined text-sm">download</span>
+            Download CSV template
+          </a>
+          <input type="file" id="csv-file-input-add-account" accept=".csv" class="hidden"/>
+          <button id="import-csv-add-account" type="button" class="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-white/80 hover:bg-white/10 text-sm font-semibold transition-colors">
+            <span class="material-symbols-outlined text-sm">upload_file</span>
+            Import CSV
+          </button>
         </div>
         <div class="flex gap-3 pt-4">
           <button type="submit" class="flex-1 bg-primary hover:bg-primary/80 text-background-dark py-2.5 rounded-lg font-bold text-sm">Add Account</button>
           <button type="button" id="close-add-account" class="px-4 py-2.5 rounded-lg border border-white/20 text-white/80 hover:bg-white/10 text-sm font-semibold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Account -->
+  <div id="modal-edit-account" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4" aria-hidden="true" data-modal>
+    <div class="glass-panel rounded-2xl p-6 lg:p-8 w-full max-w-md mx-4 shadow-2xl" role="dialog" aria-labelledby="modal-edit-account-title" onclick="event.stopPropagation()">
+      <h2 id="modal-edit-account-title" class="text-xl font-bold text-white mb-6">Edit Account</h2>
+      <form id="form-edit-account" class="space-y-4" onsubmit="event.preventDefault(); if (typeof window.submitEditAccount === 'function') window.submitEditAccount(); return false;">
+        <input id="account-edit-id" type="hidden"/>
+        <div>
+          <label for="account-edit-name" class="block text-sm font-semibold text-white/80 mb-1">Account Name</label>
+          <input id="account-edit-name" type="text" required placeholder="e.g. Chase Savings" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+        </div>
+        <div>
+          <label for="account-edit-type" class="block text-sm font-semibold text-white/80 mb-1">Type</label>
+          <select id="account-edit-type" required class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white focus:border-primary focus:ring-1 focus:ring-primary">
+            <option value="Cash">Cash</option>
+            <option value="Retirement">Retirement</option>
+            <option value="Crypto">Crypto</option>
+            <option value="Debt">Debt</option>
+          </select>
+        </div>
+        <div>
+          <label for="account-edit-institution" class="block text-sm font-semibold text-white/80 mb-1">Institution <span class="text-white/50 font-normal">optional</span></label>
+          <input id="account-edit-institution" type="text" placeholder="e.g. Fidelity" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+        </div>
+        <div class="flex flex-col gap-3 pt-4">
+          <div class="flex gap-3">
+            <button type="submit" class="flex-1 bg-primary hover:bg-primary/80 text-background-dark py-2.5 rounded-lg font-bold text-sm">Save changes</button>
+            <button type="button" id="close-edit-account" class="px-4 py-2.5 rounded-lg border border-white/20 text-white/80 hover:bg-white/10 text-sm font-semibold">Cancel</button>
+          </div>
+          <button type="button" id="delete-account-btn" class="w-full py-2.5 rounded-lg border border-red-500/50 text-red-400 hover:bg-red-500/10 text-sm font-semibold">Delete account</button>
         </div>
       </form>
     </div>
@@ -394,9 +431,84 @@
             <input id="holding-purchase-price" type="number" step="0.01" min="0" placeholder="Per share/unit" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
           </div>
         </div>
+        <div class="border-t border-white/20 pt-4 mt-4 flex flex-wrap gap-2">
+          <a id="download-template-btn" href="import-template.csv" download="horizon60-import-template.csv" class="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-white/80 hover:bg-white/10 text-sm font-semibold transition-colors">
+            <span class="material-symbols-outlined text-sm">download</span>
+            Download CSV template
+          </a>
+          <input type="file" id="csv-file-input" accept=".csv" class="hidden"/>
+          <button id="import-csv-btn" type="button" class="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-white/80 hover:bg-white/10 text-sm font-semibold transition-colors">
+            <span class="material-symbols-outlined text-sm">upload_file</span>
+            Import CSV
+          </button>
+        </div>
         <div class="flex gap-3 pt-4">
           <button type="submit" class="flex-1 bg-primary hover:bg-primary/80 text-background-dark py-2.5 rounded-lg font-bold text-sm">Add Holding</button>
           <button type="button" id="close-add-holding" class="px-4 py-2.5 rounded-lg border border-white/20 text-white/80 hover:bg-white/10 text-sm font-semibold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Holding -->
+  <div id="modal-edit-holding" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4" aria-hidden="true" data-modal>
+    <div class="glass-panel rounded-2xl p-6 lg:p-8 w-full max-w-md mx-4 shadow-2xl" role="dialog" aria-labelledby="modal-edit-holding-title" onclick="event.stopPropagation()">
+      <h2 id="modal-edit-holding-title" class="text-xl font-bold text-white mb-6">Edit Holding</h2>
+      <form id="form-edit-holding" class="space-y-4">
+        <input id="edit-holding-account-id" type="hidden"/>
+        <input id="edit-holding-id" type="hidden"/>
+        <div id="edit-holding-field-balance" class="hidden">
+          <label for="edit-holding-balance" class="block text-sm font-semibold text-white/80 mb-1">Balance ($)</label>
+          <input id="edit-holding-balance" type="number" step="0.01" min="0" placeholder="0.00" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+        </div>
+        <div id="edit-holding-fields-security" class="hidden space-y-4">
+          <div>
+            <label for="edit-holding-ticker" class="block text-sm font-semibold text-white/80 mb-1">Ticker Symbol (Asset)</label>
+            <input id="edit-holding-ticker" type="text" placeholder="e.g. VTSAX, BTC" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+          </div>
+          <div>
+            <label for="edit-holding-quantity" class="block text-sm font-semibold text-white/80 mb-1">Quantity</label>
+            <input id="edit-holding-quantity" type="number" step="any" min="0" placeholder="0" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+          </div>
+          <div>
+            <label for="edit-holding-purchase-price" class="block text-sm font-semibold text-white/80 mb-1">Purchase Price (Avg Cost Basis) $</label>
+            <input id="edit-holding-purchase-price" type="number" step="0.01" min="0" placeholder="Per share/unit" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+          </div>
+          <div>
+            <label for="edit-holding-current-price" class="block text-sm font-semibold text-white/80 mb-1">Current price override $ <span class="text-white/50 font-normal">(optional)</span></label>
+            <input id="edit-holding-current-price" type="number" step="0.01" min="0" placeholder="Leave blank to use API price" class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40 focus:border-primary focus:ring-1 focus:ring-primary"/>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-3 pt-4 border-t border-white/20">
+          <button type="submit" class="flex-1 min-w-[100px] bg-primary hover:bg-primary/80 text-background-dark py-2.5 rounded-lg font-bold text-sm">Save</button>
+          <button type="button" id="delete-holding-btn" class="px-4 py-2.5 rounded-lg border border-red-500/50 text-red-400 hover:bg-red-500/10 text-sm font-semibold">Delete holding</button>
+          <button type="button" id="close-edit-holding" class="px-4 py-2.5 rounded-lg border border-white/20 text-white/80 hover:bg-white/10 text-sm font-semibold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit Snapshot modal -->
+  <div id="modal-edit-snapshot" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4" aria-hidden="true" data-modal>
+    <div class="glass-panel rounded-2xl p-6 lg:p-8 w-full max-w-md mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" role="dialog" aria-labelledby="modal-edit-snapshot-title" onclick="event.stopPropagation()">
+      <h2 id="modal-edit-snapshot-title" class="text-xl font-bold text-white mb-6">Edit snapshot</h2>
+      <form id="form-edit-snapshot" class="space-y-4">
+        <input id="edit-snapshot-index" type="hidden"/>
+        <div>
+          <label for="edit-snapshot-date" class="block text-sm font-semibold text-white/80 mb-1">Date</label>
+          <input id="edit-snapshot-date" type="date" required class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white focus:border-primary focus:ring-1 focus:ring-primary"/>
+        </div>
+        <div>
+          <label for="edit-snapshot-total" class="block text-sm font-semibold text-white/80 mb-1">Total net worth ($)</label>
+          <input id="edit-snapshot-total" type="number" step="0.01" required class="w-full rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white focus:border-primary focus:ring-1 focus:ring-primary"/>
+        </div>
+        <div id="edit-snapshot-accounts" class="space-y-3">
+          <!-- Account balance inputs filled by JS -->
+        </div>
+        <div class="flex flex-wrap gap-3 pt-4 border-t border-white/20">
+          <button type="submit" class="flex-1 min-w-[100px] bg-primary hover:bg-primary/80 text-background-dark py-2.5 rounded-lg font-bold text-sm">Save</button>
+          <button type="button" id="delete-snapshot-btn" class="px-4 py-2.5 rounded-lg border border-red-500/50 text-red-400 hover:bg-red-500/10 text-sm font-semibold">Delete snapshot</button>
+          <button type="button" id="close-edit-snapshot" class="px-4 py-2.5 rounded-lg border border-white/20 text-white/80 hover:bg-white/10 text-sm font-semibold">Cancel</button>
         </div>
       </form>
     </div>
@@ -406,9 +518,9 @@
   <div id="modal-api-key" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4" aria-hidden="true" data-modal>
     <div class="glass-panel rounded-2xl p-6 lg:p-8 w-full max-w-md mx-4 shadow-2xl" onclick="event.stopPropagation()">
       <h2 class="text-xl font-bold text-white mb-2">Live Stock & Crypto Prices</h2>
-      <p class="text-white/60 text-sm mb-4">Enter a free Alpha Vantage API key to fetch live prices for Retirement and Crypto holdings. Get one at <a href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noopener" class="text-primary underline">alphavantage.co</a>.</p>
+      <p class="text-white/60 text-sm mb-4">Enter your Finnhub API key to fetch live prices for Retirement and Crypto holdings. Get a free key at <a href="https://finnhub.io/register" target="_blank" rel="noopener" class="text-primary underline">finnhub.io</a>.</p>
       <div class="flex gap-2">
-        <input id="api-key-input" type="password" placeholder="Your API key" class="flex-1 rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40"/>
+        <input id="api-key-input" type="password" placeholder="Your Finnhub API key" class="flex-1 rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-white placeholder-white/40"/>
         <button type="button" id="save-api-key" class="bg-primary hover:bg-primary/80 text-background-dark px-4 py-2.5 rounded-lg font-bold text-sm">Save</button>
       </div>
       <button type="button" id="skip-api-key" class="mt-3 text-white/50 hover:text-white text-sm">Skip (use cost basis as fallback)</button>

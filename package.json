@@ -1,0 +1,8 @@
+{
+  "name": "horizon60",
+  "private": true,
+  "scripts": {
+    "dev": "cd clerk-nextjs && npm run dev",
+    "build": "cd clerk-nextjs && npm run build"
+  }
+}
